@@ -62,7 +62,11 @@ export const useLiveStore = defineStore({
   state: () => ({
     tabs: {
       1: newTab()
-    }
+    },
+    sessions: [],
+    loadingSessions: false,
+    selectedSessionLogs: '',
+    selectedSessionOrders: []
   }),
   actions: {
     addTab () {
@@ -396,6 +400,46 @@ export const useLiveStore = defineStore({
         this.tabs[id].results.terminating = false
         notifier.success('Session terminated successfully')
       }
+    },
+
+    // Live session history
+    async fetchSessions () {
+      this.loadingSessions = true
+      try {
+        const res = await axios.post('/live/sessions')
+        this.sessions = res.data.sessions || []
+      } catch (error) {
+        notifier.error(`Failed to fetch live sessions: ${error.response?.statusText || error.message}`)
+      } finally {
+        this.loadingSessions = false
+      }
+    },
+
+    async fetchSessionLogs (sessionId) {
+      try {
+        const res = await axios.post('/live/logs', { session_id: sessionId })
+        this.selectedSessionLogs = res.data.logs || ''
+        return res.data.logs
+      } catch (error) {
+        notifier.error(`Failed to fetch logs: ${error.response?.statusText || error.message}`)
+        return ''
+      }
+    },
+
+    async fetchSessionOrders (sessionId) {
+      try {
+        const res = await axios.post('/live/orders', { session_id: sessionId })
+        this.selectedSessionOrders = res.data.orders || []
+        return res.data.orders
+      } catch (error) {
+        notifier.error(`Failed to fetch orders: ${error.response?.statusText || error.message}`)
+        return []
+      }
+    },
+
+    clearSelectedSession () {
+      this.selectedSessionLogs = ''
+      this.selectedSessionOrders = []
     }
   }
 })

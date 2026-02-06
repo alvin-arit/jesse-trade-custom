@@ -41,7 +41,9 @@ export const useCandlesStore = defineStore({
   state: () => ({
     tabs: {
       1: newTab()
-    }
+    },
+    existingCandles: [],
+    loadingExisting: false
   }),
   actions: {
     addTab () {
@@ -63,8 +65,8 @@ export const useCandlesStore = defineStore({
       this.tabs[id].results.exception.error = ''
       this.tabs[id].results.alert.message = ''
 
-      axios.post('/import-candles', {
-        id,
+      axios.post('/candles/import', {
+        id: String(id),
         exchange: this.tabs[id].form.exchange,
         symbol: this.tabs[id].form.symbol,
         start_date: this.tabs[id].form.start_date,
@@ -79,11 +81,8 @@ export const useCandlesStore = defineStore({
         return
       }
 
-      axios.delete('/import-candles', {
-        headers: {},
-        data: {
-          id
-        }
+      axios.post('/candles/cancel-import', {
+        id: String(id)
       }).then(() => {
         // if was in test cancel execution directly
         if (window.Cypress) {
@@ -123,5 +122,47 @@ export const useCandlesStore = defineStore({
         notifier.success('Session terminated successfully')
       }
     },
+
+    // Existing candles management
+    async fetchExistingCandles () {
+      this.loadingExisting = true
+      try {
+        const res = await axios.post('/candles/existing')
+        this.existingCandles = res.data.data || []
+      } catch (error) {
+        notifier.error(`Failed to fetch existing candles: ${error.response?.statusText || error.message}`)
+      } finally {
+        this.loadingExisting = false
+      }
+    },
+
+    async deleteCandles (exchange, symbol, startDate, finishDate) {
+      try {
+        await axios.post('/candles/delete', {
+          exchange,
+          symbol,
+          start_date: startDate,
+          finish_date: finishDate
+        })
+        notifier.success('Candles deleted successfully')
+        // Refresh the list
+        await this.fetchExistingCandles()
+        return true
+      } catch (error) {
+        notifier.error(`Failed to delete candles: ${error.response?.statusText || error.message}`)
+        return false
+      }
+    },
+
+    async clearCache () {
+      try {
+        await axios.post('/candles/clear-cache')
+        notifier.success('Cache cleared successfully')
+        return true
+      } catch (error) {
+        notifier.error(`Failed to clear cache: ${error.response?.statusText || error.message}`)
+        return false
+      }
+    }
   }
 })

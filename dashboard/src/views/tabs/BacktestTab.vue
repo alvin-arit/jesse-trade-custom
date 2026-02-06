@@ -54,7 +54,7 @@
     </div>
   </div>
 
-  <LayoutWithSidebar else>
+  <LayoutWithSidebar v-else>
     <template #left>
       <!-- alert -->
       <div v-if="results.showResults && results.alert.message">
@@ -74,13 +74,6 @@
             name="debug_mode"
             title="Debug Mode"
             description="Logs every step of the execution. Very helpful for debugging your strategy but takes a lot longer to execute"/>
-
-          <!-- export chart -->
-          <ToggleButton
-            :object="form"
-            name="export_chart"
-            title="Export Charts"
-            description="Exports charts for your portfolio's daily balance."/>
 
           <!-- export trading view -->
           <ToggleButton
@@ -138,14 +131,42 @@
           <Divider title="Routes"/>
           <MultipleValuesTable :data="results.routes_info" header/>
 
-          <Divider v-if="results.hyperparameters.length" class="mt-16" title="Hyperparameters"/>
-          <KeyValueTable v-if="results.hyperparameters.length" :data="results.hyperparameters"/>
+          <!-- View Toggle -->
+          <div v-if="hasExecutedTrades" class="mt-8 flex justify-center">
+            <ViewToggle v-model="currentView" />
+          </div>
 
-          <Divider v-if="hasExecutedTrades" class="mt-16" title="Equity Curve"/>
-          <EquityCurve v-if="hasExecutedTrades" :equity-curve="results.charts.equity_curve"/>
+          <!-- Summary View -->
+          <div v-if="currentView === 'summary'">
+            <Divider v-if="results.hyperparameters.length" class="mt-16" title="Hyperparameters"/>
+            <KeyValueTable v-if="results.hyperparameters.length" :data="results.hyperparameters"/>
 
-          <Divider v-if="hasExecutedTrades" class="mt-16" title="Performance"/>
-          <KeyValueTable v-if="hasExecutedTrades" :data="results.metrics"/>
+            <Divider v-if="hasExecutedTrades" class="mt-16" title="Equity Curve"/>
+            <EquityCurve v-if="hasExecutedTrades" :equity-curve="results.charts.equity_curve"/>
+
+            <Divider v-if="hasExecutedTrades" class="mt-16" title="Performance"/>
+            <KeyValueTable v-if="hasExecutedTrades" :data="results.metrics"/>
+          </div>
+
+          <!-- Detailed View -->
+          <div v-if="currentView === 'detailed' && hasExecutedTrades" class="mt-8">
+            <DetailedResultsView
+              :candles="results.charts.candles"
+              :orders="results.charts.orders"
+              :lines="results.charts.lines"
+              :trades="results.trades"
+              :shapes="results.charts.shapes"
+            />
+
+            <Divider v-if="results.hyperparameters.length" class="mt-16" title="Hyperparameters"/>
+            <KeyValueTable v-if="results.hyperparameters.length" :data="results.hyperparameters"/>
+
+            <Divider class="mt-16" title="Equity Curve"/>
+            <EquityCurve :equity-curve="results.charts.equity_curve"/>
+
+            <Divider class="mt-16" title="Performance"/>
+            <KeyValueTable :data="results.metrics"/>
+          </div>
 
           <div v-if="!hasExecutedTrades"
                class="text-yellow-500 border-yellow-400 bg-yellow-50 dark:bg-gray-700 dark:text-yellow-400 mt-16 text-center text-2xl rounded border-2 border-dashed dark:border-gray-800 py-16 select-none"
@@ -180,7 +201,7 @@
             Debugging Logs
           </a>
 
-          <a v-if="form.export_chart && hasExecutedTrades"
+          <a v-if="hasExecutedTrades"
              :href="legacyChartUrl"
              target="_blank"
              class="flex justify-center items-center btn-secondary text-center mb-4 w-full">
@@ -250,6 +271,13 @@ import { useBacktestStore } from '@/stores/backtest'
 import Logs from '@/components/Logs'
 import LayoutWithSidebar from '@/layouts/LayoutWithSidebar'
 import MultipleValuesTable from '@/components/MultipleValuesTable'
+import KeyValueTable from '@/components/KeyValueTable'
+import KeyValueTableSimple from '@/components/KeyValueTableSimple'
+import EquityCurve from '@/components/Charts/EquityCurve'
+import CircleProgressbar from '@/components/Functional/CircleProgressbar'
+import Routes from '@/components/Routes'
+import Exception from '@/components/Exception'
+import Alert from '@/components/Alert'
 import { useMainStore } from '@/stores/main'
 import { ClipboardIcon, CheckIcon } from '@heroicons/vue/solid'
 import {
@@ -264,6 +292,8 @@ import SlideOver from '@/components/Functional/SlideOver'
 import ToggleButton from '@/components/ToggleButton'
 import helpers from '@/helpers'
 import Divider from '@/components/Divider'
+import ViewToggle from '@/components/Backtest/ViewToggle.vue'
+import DetailedResultsView from '@/components/Backtest/DetailedResultsView.vue'
 
 export default {
   name: 'BacktestTab',
@@ -272,6 +302,13 @@ export default {
     Logs,
     ToggleButton,
     MultipleValuesTable,
+    KeyValueTable,
+    KeyValueTableSimple,
+    EquityCurve,
+    CircleProgressbar,
+    Routes,
+    Exception,
+    Alert,
     ClipboardIcon,
     CheckIcon,
     SlideOver,
@@ -281,7 +318,9 @@ export default {
     ReplyIcon,
     DocumentDownloadIcon,
     BanIcon,
-    Divider
+    Divider,
+    ViewToggle,
+    DetailedResultsView
   },
   props: {
     form: {
@@ -297,6 +336,7 @@ export default {
     return {
       copiedLogsInfo: false,
       svgObject: { display: false },
+      currentView: 'summary'
     }
   },
   computed: {

@@ -3,6 +3,27 @@ import socketActions from '@/plugins/socketActions'
 
 import { useMainStore } from '@/stores/main'
 
+// Decompress gzip data from base64 string
+async function decompressData (base64Data) {
+  try {
+    // Decode base64 to binary
+    const binaryString = atob(base64Data)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+
+    // Use DecompressionStream API (modern browsers)
+    const ds = new DecompressionStream('gzip')
+    const decompressedStream = new Response(bytes).body.pipeThrough(ds)
+    const decompressedData = await new Response(decompressedStream).text()
+    return JSON.parse(decompressedData)
+  } catch (error) {
+    console.error('Failed to decompress data:', error)
+    return null
+  }
+}
+
 export default {
   install: (app, settings) => {
     const mainStore = useMainStore()
@@ -72,9 +93,18 @@ export default {
         // Listen ws events and pass data to Pinia's actions
         wsp.onUnpackedMessage.addListener(async message => {
           const event = message.event
-          const data = message.data
+          let data = message.data
           const id = message.id
           const actions = socketActions().get(event)
+
+          // Decompress data if it's compressed
+          if (message.is_compressed && typeof data === 'string') {
+            data = await decompressData(data)
+            if (data === null) {
+              console.error('Failed to decompress message for event:', event)
+              return
+            }
+          }
 
           // console.log(event, id, data)
 

@@ -48,6 +48,7 @@ import { useBacktestStore } from '@/stores/backtest'
 import { XIcon, PlusSmIcon } from '@heroicons/vue/outline'
 import { useCandlesStore } from '@/stores/candles'
 import { useLiveStore } from '@/stores/live'
+import { useMonteCarloStore } from '@/stores/monteCarlo'
 
 export default {
   name: 'Tabs',
@@ -82,6 +83,9 @@ export default {
         return store.addTab()
       } else if (this.$route.name === 'Live') {
         const store = useLiveStore()
+        return store.addTab()
+      } else if (this.$route.name === 'MonteCarlo') {
+        const store = useMonteCarloStore()
         return store.addTab()
       }
     },

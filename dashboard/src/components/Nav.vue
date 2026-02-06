@@ -110,6 +110,50 @@
 
                   <div class="py-1">
                     <MenuItem v-slot="{ active }">
+                      <router-link to="/backtest-history"
+                                   :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']">
+                        <ClockIcon class="w-5 h-5 mr-2"/>
+                        Backtest History
+                      </router-link>
+                    </MenuItem>
+
+                    <MenuItem v-slot="{ active }">
+                      <router-link to="/optimization-history"
+                                   :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']">
+                        <ClockIcon class="w-5 h-5 mr-2"/>
+                        Optimization History
+                      </router-link>
+                    </MenuItem>
+
+                    <MenuItem v-slot="{ active }">
+                      <router-link to="/monte-carlo-history"
+                                   :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']">
+                        <ClockIcon class="w-5 h-5 mr-2"/>
+                        Monte Carlo History
+                      </router-link>
+                    </MenuItem>
+
+                    <MenuItem v-if="hasLivePluginInstalled" v-slot="{ active }">
+                      <router-link to="/live-history"
+                                   :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']">
+                        <ClockIcon class="w-5 h-5 mr-2"/>
+                        Live Trading History
+                      </router-link>
+                    </MenuItem>
+                  </div>
+
+                  <div class="py-1">
+                    <MenuItem v-slot="{ active }">
+                      <router-link to="/strategies"
+                                   :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']">
+                        <CodeIcon class="w-5 h-5 mr-2"/>
+                        Manage Strategies
+                      </router-link>
+                    </MenuItem>
+                  </div>
+
+                  <div class="py-1">
+                    <MenuItem v-slot="{ active }">
                       <button data-cy="nav-create-strategy"
                               :class="[active ? 'bg-gray-100 dark:bg-gray-800' : '', 'flex justify-left items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300']"
                               @click="openFeedback">
@@ -285,7 +329,10 @@ import {
   CollectionIcon,
   HomeIcon,
   SparklesIcon,
-  ChatAltIcon
+  ChatAltIcon,
+  ClockIcon,
+  BeakerIcon,
+  CodeIcon
 } from '@heroicons/vue/outline'
 import SlideOver from '@/components/Functional/SlideOver'
 import { mapState } from 'pinia'
@@ -333,7 +380,10 @@ export default {
     QuestionMarkCircleIcon,
     CollectionIcon,
     HomeIcon,
-    ThemeSwitch
+    ThemeSwitch,
+    ClockIcon,
+    BeakerIcon,
+    CodeIcon
   },
   setup () {
     const open = ref(false)
@@ -368,6 +418,11 @@ export default {
           name: 'Optimization',
           to: '/optimization/',
           icon: ChipIcon
+        },
+        {
+          name: 'Monte Carlo',
+          to: '/monte-carlo/',
+          icon: BeakerIcon
         },
       ]
 

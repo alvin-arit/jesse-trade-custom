@@ -7,6 +7,15 @@ import notifier from '../notifier'
 
 let idCounter = 0
 
+// Generate a UUID v4
+function generateUUID () {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 /**
  * A function that returns required data for a new tab
  */
@@ -18,7 +27,6 @@ function newTab () {
       start_date: '2021-01-01',
       finish_date: '2021-06-01',
       debug_mode: false,
-      export_chart: false,
       export_tradingview: false,
       export_full_reports: false,
       export_csv: false,
@@ -43,8 +51,16 @@ function newTab () {
         error: '',
         traceback: ''
       },
+      trades: [],
       charts: {
-        equity_curve: []
+        equity_curve: [],
+        candles: [],
+        orders: [],
+        lines: [],
+        shapes: [],
+        extraLines: [],
+        horizontalLines: [],
+        extraHorizontalLines: []
       },
       alert: {
         message: '',
@@ -74,6 +90,11 @@ export const useBacktestStore = defineStore({
       this.start(tab.id)
     },
     start (id) {
+      // Generate a UUID for this session
+      const sessionId = generateUUID()
+      this.tabs[id].sessionId = sessionId
+      console.log('[Backtest] Starting session with UUID:', sessionId, 'for tab:', id)
+
       this.tabs[id].results.progressbar.current = 0
       this.tabs[id].results.executing = true
       this.tabs[id].results.infoLogs = ''
@@ -94,19 +115,26 @@ export const useBacktestStore = defineStore({
         return route
       })
 
+      // Get exchange from the first route
+      const exchange = this.tabs[id].form.routes.length > 0
+        ? this.tabs[id].form.routes[0].exchange
+        : ''
+
       axios.post('/backtest', {
-        id,
+        id: sessionId,
+        exchange,
         routes: this.tabs[id].form.routes,
-        extra_routes: this.tabs[id].form.extra_routes,
+        data_routes: this.tabs[id].form.extra_routes,
         config: mainStore.settings.backtest,
         start_date: this.tabs[id].form.start_date,
         finish_date: this.tabs[id].form.finish_date,
         debug_mode: this.tabs[id].form.debug_mode,
         export_csv: this.tabs[id].form.export_csv,
-        export_chart: this.tabs[id].form.export_chart,
+        export_chart: true, // Always export chart data
         export_tradingview: this.tabs[id].form.export_tradingview,
-        export_full_reports: this.tabs[id].form.export_full_reports,
         export_json: this.tabs[id].form.export_json,
+        fast_mode: false,
+        benchmark: false
       }).catch(error => {
         notifier.error(`[${error.response.status}]: ${error.response.statusText}`)
         this.tabs[id].results.executing = false
@@ -118,10 +146,16 @@ export const useBacktestStore = defineStore({
         return
       }
 
+      const sessionId = this.tabs[id].sessionId
+      if (!sessionId) {
+        this.tabs[id].results.executing = false
+        return
+      }
+
       axios.delete('/backtest', {
         headers: {},
         data: {
-          id
+          id: sessionId
         }
       }).then(() => {
         // this is for passing cypress tests
@@ -138,7 +172,33 @@ export const useBacktestStore = defineStore({
       this.tabs[id].results.showResults = false
     },
 
-    candlesInfoEvent (id, data) {
+    // Find tab by session UUID
+    getTabBySessionId (sessionId) {
+      console.log('[Backtest] Looking for tab with sessionId:', sessionId)
+      console.log('[Backtest] Available tabs:', Object.keys(this.tabs).map(k => ({ tabId: k, sessionId: this.tabs[k].sessionId })))
+      for (const tabId in this.tabs) {
+        if (this.tabs[tabId].sessionId === sessionId) {
+          console.log('[Backtest] Found tab:', tabId)
+          return this.tabs[tabId]
+        }
+      }
+      console.log('[Backtest] No tab found for sessionId:', sessionId)
+      return null
+    },
+
+    // Find tab ID by session UUID
+    getTabIdBySessionId (sessionId) {
+      for (const tabId in this.tabs) {
+        if (this.tabs[tabId].sessionId === sessionId) {
+          return tabId
+        }
+      }
+      return null
+    },
+
+    candlesInfoEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
       const list = [
         ['Period', data.duration],
         ['Starting Date', helpers.timestampToDate(
@@ -151,9 +211,11 @@ export const useBacktestStore = defineStore({
         list.push(['Leverage', data.leverage])
         list.push(['Leverage Mode', data.leverage_mode])
       }
-      this.tabs[id].results.info = list
+      tab.results.info = list
     },
-    routesInfoEvent (id, data) {
+    routesInfoEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
       const arr = [['Exchange', 'Symbol', 'Timeframe', 'Strategy']]
       data.forEach(item => {
         arr.push([
@@ -163,34 +225,52 @@ export const useBacktestStore = defineStore({
           { value: item.strategy_name, style: '' },
         ])
       })
-      this.tabs[id].results.routes_info = arr
+      tab.results.routes_info = arr
     },
-    progressbarEvent (id, data) {
-      this.tabs[id].results.progressbar = data
+    progressbarEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.progressbar = data
     },
-    infoLogEvent (id, data) {
-      this.tabs[id].results.infoLogs += `[${helpers.timestampToTime(
+    infoLogEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.infoLogs += `[${helpers.timestampToTime(
         data.timestamp
       )}] ${data.message}\n`
     },
-    exceptionEvent (id, data) {
-      this.tabs[id].results.exception.error = data.error
-      this.tabs[id].results.exception.traceback = data.traceback
+    exceptionEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.exception.error = data.error
+      tab.results.exception.traceback = data.traceback
     },
-    generalInfoEvent (id, data) {
-      this.tabs[id].results.generalInfo = data
+    generalInfoEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.generalInfo = data
     },
-    hyperparametersEvent (id, data) {
-      this.tabs[id].results.hyperparameters = data
+    hyperparametersEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.hyperparameters = data
     },
-    metricsEvent (id, data) {
-      // no trades were executed
-      if (data === null) {
-        this.tabs[id].results.metrics = []
+    metricsEvent (sessionId, data) {
+      console.log('[Backtest] metricsEvent received:', { sessionId, dataExists: !!data })
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) {
+        console.log('[Backtest] metricsEvent: No tab found, ignoring')
         return
       }
+      // no trades were executed
+      if (data === null) {
+        console.log('[Backtest] metricsEvent: No data (null)')
+        tab.results.metrics = []
+        return
+      }
+      console.log('[Backtest] metricsEvent: Processing metrics')
 
-      this.tabs[id].results.metrics = [
+      tab.results.metrics = [
         ['Total Closed Trades', data.total],
         ['Total Net Profit', `${_.round(data.net_profit, 2)} (${_.round(data.net_profit_percentage, 2)}%)`],
         ['Starting => Finishing Balance', `${_.round(data.starting_balance, 2)} => ${_.round(data.finishing_balance, 2)}`],
@@ -219,32 +299,104 @@ export const useBacktestStore = defineStore({
         ['Total Losing Trades', data.total_losing_trades]
       ]
     },
-    equityCurveEvent (id, data) {
-      // no trades were executed
-      if (data === null) {
-        this.tabs[id].results.charts.equity_curve = []
+    equityCurveEvent (sessionId, data) {
+      console.log('[Backtest] equityCurveEvent received:', { sessionId, data })
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) {
+        console.log('[Backtest] equityCurveEvent: No tab found, ignoring')
+        return
+      }
+      // no trades were executed or invalid data
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        console.log('[Backtest] equityCurveEvent: No data or empty array')
+        tab.results.charts.equity_curve = []
       } else {
-        this.tabs[id].results.charts.equity_curve = []
-        data.forEach(item => {
-          this.tabs[id].results.charts.equity_curve.push({
-            value: item.balance,
-            time: item.timestamp
+        console.log('[Backtest] equityCurveEvent: Processing data')
+        tab.results.charts.equity_curve = []
+        // Backend sends: [{name: 'Portfolio', data: [{time, value, color}, ...], color}, ...]
+        // We need to extract the first series (Portfolio) data points
+        if (Array.isArray(data) && data.length > 0 && data[0].data) {
+          // New format: array of series objects
+          const portfolioSeries = data[0] // Get the Portfolio series
+          if (portfolioSeries.data && Array.isArray(portfolioSeries.data)) {
+            portfolioSeries.data.forEach(item => {
+              tab.results.charts.equity_curve.push({
+                value: item.value,
+                time: item.time
+              })
+            })
+          }
+        } else if (Array.isArray(data)) {
+          // Old format: flat array of {balance, timestamp}
+          data.forEach(item => {
+            tab.results.charts.equity_curve.push({
+              value: item.balance || item.value,
+              time: item.timestamp || item.time
+            })
           })
-        })
+        }
       }
 
       // backtest is finished, time to show charts:
-      this.tabs[id].results.executing = false
-      this.tabs[id].results.showResults = true
+      tab.results.executing = false
+      tab.results.showResults = true
+
+      // Always fetch chart data for the interactive chart
+      const tabId = this.getTabIdBySessionId(sessionId)
+      if (tabId) {
+        console.log('[Backtest] Fetching chart data for completed backtest')
+        this.fetchChartData(tabId)
+      }
     },
-    terminationEvent (id) {
-      if (this.tabs[id].results.executing) {
-        this.tabs[id].results.executing = false
+    terminationEvent (sessionId) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      if (tab.results.executing) {
+        tab.results.executing = false
         notifier.success('Session terminated successfully')
       }
     },
-    alertEvent (id, data) {
-      this.tabs[id].results.alert = data
+    alertEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.alert = data
+    },
+    tradesEvent (sessionId, data) {
+      const tab = this.getTabBySessionId(sessionId)
+      if (!tab) return
+      tab.results.trades = data || []
+    },
+
+    async fetchChartData (tabId) {
+      const tab = this.tabs[tabId]
+      if (!tab || !tab.results.generalInfo.session_id) {
+        console.log('[Backtest] fetchChartData: No session ID available')
+        return
+      }
+
+      const sessionId = tab.results.generalInfo.session_id
+      console.log('[Backtest] Fetching chart data for session:', sessionId)
+
+      try {
+        const res = await axios.post(`/backtest/sessions/${sessionId}/chart-data`)
+        const chartData = res.data.chart_data
+
+        if (chartData) {
+          console.log('[Backtest] Chart data received:', Object.keys(chartData))
+          tab.results.charts.candles = chartData.candles_chart || []
+          tab.results.charts.orders = chartData.orders_chart || []
+          tab.results.charts.lines = chartData.add_line_to_candle_chart || []
+          tab.results.charts.shapes = chartData.add_shape_to_candle_chart || []
+          tab.results.charts.extraLines = chartData.add_extra_line_chart || []
+          tab.results.charts.horizontalLines = chartData.add_horizontal_line_to_candle_chart || []
+          tab.results.charts.extraHorizontalLines = chartData.add_horizontal_line_to_extra_chart || []
+        } else {
+          console.log('[Backtest] No chart data available')
+        }
+      } catch (error) {
+        console.error('[Backtest] Failed to fetch chart data:', error)
+        notifier.error('Failed to fetch chart data')
+      }
     },
   }
 })

@@ -70,6 +70,17 @@
                  class="dark:hover:bg-gray-800 hover:bg-gray-50 cursor-pointer dark:bg-backdrop-dark flex-1 focus:outline-none focus:ring-0 dark:focus:border-indigo-400 focus:border-indigo-500 flex justify-center items-center py-6 text-center sm:text-sm border border-gray-200 dark:border-gray-900 rounded-md"
           >
         </div>
+
+        <!-- Existing Candles Section -->
+        <div class="mt-16">
+          <ExistingCandlesTable
+            :candles="existingCandles"
+            :loading="loadingExisting"
+            @delete="confirmDeleteCandles"
+            @refresh="fetchExistingCandles"
+            @clear-cache="confirmClearCache"
+          />
+        </div>
       </div>
     </template>
 
@@ -110,10 +121,11 @@ import LayoutWithSidebar from '@/layouts/LayoutWithSidebar'
 import { useMainStore } from '@/stores/main'
 import { ExclamationIcon } from '@heroicons/vue/solid'
 import helpers from '@/helpers'
+import ExistingCandlesTable from '@/components/Candles/ExistingCandlesTable'
 
 export default {
   name: 'CandlesTab',
-  components: { LayoutWithSidebar, ExclamationIcon, LightningBoltIcon, PlusSmIcon, BanIcon },
+  components: { LayoutWithSidebar, ExclamationIcon, LightningBoltIcon, PlusSmIcon, BanIcon, ExistingCandlesTable },
   props: {
     form: {
       type: Object,
@@ -127,11 +139,15 @@ export default {
   data () {
     return {
       totalSymbolError: [],
-      copiedForm: { symbol: this.form }
+      copiedForm: { symbol: this.form },
+      candleToDelete: null,
+      showDeleteConfirm: false,
+      showClearCacheConfirm: false
     }
   },
   computed: {
     ...mapState(useMainStore, ['isInitiated', 'backtestingExchangeNames']),
+    ...mapState(useCandlesStore, ['existingCandles', 'loadingExisting']),
     remainingTimeText () {
       return helpers.remainingTimeText(this.results.progressbar.estimated_remaining_seconds)
     },
@@ -160,9 +176,10 @@ export default {
   created () {
     this.initiate()
     this.checkSymbol()
+    this.fetchExistingCandles()
   },
   methods: {
-    ...mapActions(useCandlesStore, ['addTab', 'startInNewTab', 'start', 'cancel', 'rerun', 'newBacktest']),
+    ...mapActions(useCandlesStore, ['addTab', 'startInNewTab', 'start', 'cancel', 'rerun', 'newBacktest', 'fetchExistingCandles', 'deleteCandles', 'clearCache']),
     initiate () {
       if (this.isInitiated === true && this.form.exchange === '') {
         this.form.exchange = this.backtestingExchangeNames[0]
@@ -202,6 +219,16 @@ export default {
         this.totalSymbolError.push(item)
       }
     },
+    confirmDeleteCandles (candle) {
+      if (confirm(`Are you sure you want to delete candles for ${candle.exchange} ${candle.symbol}?`)) {
+        this.deleteCandles(candle.exchange, candle.symbol, candle.start_date, candle.finish_date)
+      }
+    },
+    confirmClearCache () {
+      if (confirm('Are you sure you want to clear the candles cache?')) {
+        this.clearCache()
+      }
+    }
   }
 }
 </script>

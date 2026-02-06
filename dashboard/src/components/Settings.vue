@@ -318,11 +318,29 @@
         </div>
       </Card>
     </div>
+
+    <!-- Exchange API Keys -->
+    <div v-if="currentTab === 'Exchange Keys'" class="space-y-6 sm:px-6 lg:px-0 lg:col-span-9 w-full">
+      <ExchangeApiKeys />
+    </div>
+
+    <!-- Notification Keys -->
+    <div v-if="currentTab === 'Notifications'" class="space-y-6 sm:px-6 lg:px-0 lg:col-span-9 w-full">
+      <NotificationKeys />
+    </div>
+
+    <!-- System Info -->
+    <div v-if="currentTab === 'System'" class="space-y-6 sm:px-6 lg:px-0 lg:col-span-9 w-full">
+      <SystemInfo />
+    </div>
   </div>
 </template>
 
 <script>
-import { CalculatorIcon, ChipIcon, CurrencyDollarIcon } from '@heroicons/vue/outline'
+import { CalculatorIcon, ChipIcon, CurrencyDollarIcon, KeyIcon, BellIcon, ServerIcon } from '@heroicons/vue/outline'
+import ExchangeApiKeys from '@/components/Settings/ExchangeApiKeys'
+import NotificationKeys from '@/components/Settings/NotificationKeys'
+import SystemInfo from '@/components/Settings/SystemInfo'
 import Checkbox from '@/components/Checkbox'
 import Divider from '@/components/Divider'
 import Heading from '@/components/Heading'
@@ -345,7 +363,10 @@ export default {
     Card,
     RadioGroups,
     FormInput,
-    NumberInput
+    NumberInput,
+    ExchangeApiKeys,
+    NotificationKeys,
+    SystemInfo
   },
   data () {
     return {
@@ -376,6 +397,9 @@ export default {
       if (this.hasLivePluginInstalled) {
         arr.push({ name: 'Live', icon: CurrencyDollarIcon })
       }
+      arr.push({ name: 'Exchange Keys', icon: KeyIcon })
+      arr.push({ name: 'Notifications', icon: BellIcon })
+      arr.push({ name: 'System', icon: ServerIcon })
       return arr
     }
   },

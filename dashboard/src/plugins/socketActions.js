@@ -2,12 +2,14 @@ import { useBacktestStore } from '@/stores/backtest'
 import { useCandlesStore } from '@/stores/candles'
 import { useLiveStore } from '@/stores/live'
 import { useOptimizationStore } from '@/stores/optimization'
+import { useMonteCarloStore } from '@/stores/monteCarlo'
 
 export default function () {
   const backtest = useBacktestStore()
   const candles = useCandlesStore()
   const live = useLiveStore()
   const optimize = useOptimizationStore()
+  const monteCarlo = useMonteCarloStore()
 
   // Prepare needed actions for each socket event
   return new Map([
@@ -44,6 +46,9 @@ export default function () {
     ]],
     ['backtest.alert', [
       backtest.alertEvent
+    ]],
+    ['backtest.trades', [
+      backtest.tradesEvent
     ]],
 
     // candles
@@ -154,6 +159,38 @@ export default function () {
     ]],
     ['optimize.best_candidates', [
       optimize.bestCandidatesEvent
+    ]],
+
+    // Monte Carlo
+    ['monte_carlo.progressbar', [
+      monteCarlo.progressbarEvent
+    ]],
+    ['monte_carlo.info_log', [
+      monteCarlo.infoLogEvent
+    ]],
+    ['monte_carlo.routes_info', [
+      monteCarlo.routesInfoEvent
+    ]],
+    ['monte_carlo.general_info', [
+      monteCarlo.generalInfoEvent
+    ]],
+    ['monte_carlo.metrics', [
+      monteCarlo.metricsEvent
+    ]],
+    ['monte_carlo.equity_curves', [
+      monteCarlo.equityCurvesEvent
+    ]],
+    ['monte_carlo.scenarios', [
+      monteCarlo.scenariosEvent
+    ]],
+    ['monte_carlo.exception', [
+      monteCarlo.exceptionEvent
+    ]],
+    ['monte_carlo.termination', [
+      monteCarlo.terminationEvent
+    ]],
+    ['monte_carlo.alert', [
+      monteCarlo.alertEvent
     ]],
   ])
 }

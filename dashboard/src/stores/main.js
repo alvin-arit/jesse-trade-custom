@@ -88,6 +88,8 @@ export const useMainStore = defineStore({
     strategies: [],
     exchangeInfo: {},
     jesse_supported_timeframes: [],
+    activeWorkers: [],
+    loadingWorkers: false,
   }),
   getters: {
     backtestingExchangeNames () {
@@ -176,6 +178,26 @@ export const useMainStore = defineStore({
       },
       1000,
       { leading: true, trailing: true }
-    )
+    ),
+
+    async fetchActiveWorkers () {
+      this.loadingWorkers = true
+      try {
+        const res = await axios.get('/system/active-workers')
+        this.activeWorkers = res.data.workers || []
+      } catch (error) {
+        notifier.error(`Failed to fetch active workers: ${error.response?.statusText || error.message}`)
+      } finally {
+        this.loadingWorkers = false
+      }
+    },
+
+    getDownloadUrl (mode, type, sessionId) {
+      let url = `/download/${mode}/${type}/${sessionId}?token=${sessionStorage.auth_key}`
+      if (this.baseURL !== '/') {
+        url = this.baseURL + url
+      }
+      return url
+    }
   }
 })

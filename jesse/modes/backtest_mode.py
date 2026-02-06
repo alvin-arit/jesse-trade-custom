@@ -205,28 +205,19 @@ def _execute_backtest(
         raise
 
     if result and not jh.should_execute_silently():
-        sync_publish('alert', {
-            'message': f"Successfully executed backtest simulation in: {result['execution_duration']} seconds",
-            'type': 'success'
-        })
-        sync_publish('hyperparameters', result['hyperparameters'])
-        sync_publish('metrics', result['metrics'])
-        sync_publish('equity_curve', result['equity_curve'], compression=True)
-        sync_publish('trades', result['trades'], compression=True)
-        
         # Prepare chart data if requested (call formatting functions once and cache)
         chart_data = None
         if chart:
-            # Store the data for database
             chart_data = {
                 'candles_chart': _get_formatted_candles_for_frontend(),
                 'orders_chart': _get_formatted_orders_for_frontend(),
                 'add_line_to_candle_chart': _get_add_line_to_candle_chart(),
+                'add_shape_to_candle_chart': _get_add_shape_to_candle_chart(),
                 'add_extra_line_chart': _get_add_extra_line_chart(),
                 'add_horizontal_line_to_candle_chart': _get_add_horizontal_line_to_candle_chart(),
                 'add_horizontal_line_to_extra_chart': _get_add_horizontal_line_to_extra_chart()
             }
-        
+
         # Capture strategy codes for each route
         strategy_codes = {}
         import os
@@ -235,15 +226,16 @@ def _execute_backtest(
             if key not in strategy_codes:
                 try:
                     strategy_path = f'strategies/{r.strategy_name}/__init__.py'
-                    
+
                     if os.path.exists(strategy_path):
                         with open(strategy_path, 'r') as f:
                             content = f.read()
                         strategy_codes[key] = content
                 except Exception:
                     pass
-        
-        # Update backtest session in database with results
+
+        # Update backtest session in database with results BEFORE publishing events
+        # This ensures chart data is available when frontend fetches it
         from jesse.models.BacktestSession import update_backtest_session_results, update_backtest_session_status
         update_backtest_session_results(
             id=client_id,
@@ -256,6 +248,16 @@ def _execute_backtest(
             strategy_codes=strategy_codes if strategy_codes else None
         )
         update_backtest_session_status(client_id, 'finished')
+
+        # Now publish events to frontend (after database is updated)
+        sync_publish('alert', {
+            'message': f"Successfully executed backtest simulation in: {result['execution_duration']} seconds",
+            'type': 'success'
+        })
+        sync_publish('hyperparameters', result['hyperparameters'])
+        sync_publish('metrics', result['metrics'])
+        sync_publish('equity_curve', result['equity_curve'], compression=True)
+        sync_publish('trades', result['trades'], compression=True)
 
     # close database connection
     from jesse.services.db import database
@@ -305,11 +307,29 @@ def _get_formatted_orders_for_frontend():
 def _get_add_line_to_candle_chart():
     arr = []
     for r in router.routes:
+        # Convert dict format to list format for frontend
+        lines_dict = r.strategy._add_line_to_candle_chart_values
+        lines_list = []
+        for title, line_data in lines_dict.items():
+            lines_list.append({
+                'name': title,
+                'data': line_data.get('data', []),
+                'color': line_data.get('color')
+            })
+
+        # Also check if strategy has draw_lines method and merge results
+        if hasattr(r.strategy, 'draw_lines') and callable(r.strategy.draw_lines):
+            try:
+                draw_lines_result = r.strategy.draw_lines() or []
+                lines_list.extend(draw_lines_result)
+            except Exception:
+                pass
+
         arr.append({
             'exchange': r.exchange,
             'symbol': r.symbol,
             'timeframe': r.timeframe,
-            'lines': r.strategy._add_line_to_candle_chart_values
+            'lines': lines_list
         })
     return arr
 
@@ -346,6 +366,26 @@ def _get_add_horizontal_line_to_extra_chart():
             'symbol': r.symbol,
             'timeframe': r.timeframe,
             'lines': r.strategy._add_horizontal_line_to_extra_chart_values
+        })
+    return arr
+
+
+def _get_add_shape_to_candle_chart():
+    """Get shapes from strategy's draw_shapes() method if it exists"""
+    arr = []
+    for r in router.routes:
+        shapes = []
+        # Check if strategy has draw_shapes method and call it
+        if hasattr(r.strategy, 'draw_shapes') and callable(r.strategy.draw_shapes):
+            try:
+                shapes = r.strategy.draw_shapes() or []
+            except Exception:
+                shapes = []
+        arr.append({
+            'exchange': r.exchange,
+            'symbol': r.symbol,
+            'timeframe': r.timeframe,
+            'shapes': shapes
         })
     return arr
 
